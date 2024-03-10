@@ -1,0 +1,13 @@
+# github.com/MangoDream1/go-limiter v0.0.0-20240308185022-e55d0d669552
+## explicit; go 1.21.3
+github.com/MangoDream1/go-limiter
+# github.com/PuerkitoBio/goquery v1.9.1
+## explicit; go 1.18
+github.com/PuerkitoBio/goquery
+# github.com/andybalholm/cascadia v1.3.2
+## explicit; go 1.16
+github.com/andybalholm/cascadia
+# golang.org/x/net v0.21.0
+## explicit; go 1.18
+golang.org/x/net/html
+golang.org/x/net/html/atom
