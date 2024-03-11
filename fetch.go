@@ -13,12 +13,7 @@ import (
 const MAX_ATTEMPTS = 10
 
 func fetchHref(href string) (io.ReadCloser, error) {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Printf("An error has occurred while trying to retrieve href: GET %v\n", href)
-			panic(err)
-		}
-	}()
+	fmt.Printf("Fetching GET %v\n", href)
 
 	attempt := uint8(0)
 	retry := func() (*http.Response, error) {
@@ -28,6 +23,7 @@ func fetchHref(href string) (io.ReadCloser, error) {
 
 		if attempt > 0 {
 			backoff := calculateExponentialBackoff(attempt)
+			fmt.Printf("Retrying GET %v after %v\n", href, backoff)
 			time.Sleep(time.Second * time.Duration(backoff))
 		}
 
@@ -95,12 +91,12 @@ func fetchHref(href string) (io.ReadCloser, error) {
 	}
 
 	response, err := check(retry())
-	if err != nil {
+	if response == nil {
 		return nil, err
 	}
 
+	fmt.Printf("Successfully fetched GET %v \n", href)
 	return response.Body, nil
-
 }
 
 func calculateExponentialBackoff(a uint8) float64 {
