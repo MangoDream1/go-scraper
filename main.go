@@ -21,28 +21,29 @@ type Scraper struct {
 	MaxConcurrentRequests uint
 	StartUrl              string
 	hrefs                 chan string
-	htmls                 chan htmlResponses
-	limiter               limiter.Limiter
-	output                chan io.ReadCloser
+	htmls                 chan Html
+	output                chan Html
 	wg                    *sync.WaitGroup
 }
 
-type htmlResponses struct {
-	href string
-	body io.ReadCloser
+type Html struct {
+	Href string
+	Body io.Reader
 }
 
-func (s *Scraper) Start(output chan io.ReadCloser) {
+func (s *Scraper) Start(output chan Html) {
 	s.output = output
 
-	s.limiter = limiter.NewLimiter(int8(s.MaxConcurrentRequests))
+	limiter := limiter.NewLimiter(int8(s.MaxConcurrentRequests))
 	s.wg = &sync.WaitGroup{}
 
 	s.hrefs = make(chan string)
-	s.htmls = make(chan htmlResponses)
+	s.htmls = make(chan Html)
 
 	s.wg.Add(1)
-	s.hrefs <- s.StartUrl
+	go func() {
+		s.hrefs <- fixMissingHttps(s.StartUrl)
+	}()
 
 	done := make(chan bool)
 	go func() {
@@ -59,9 +60,9 @@ func (s *Scraper) Start(output chan io.ReadCloser) {
 			s.wg.Add(1) // add for go-routine for parsing
 			go func() {
 				defer s.wg.Done() // complete for go-routine for parsing
-				err := s.ParseHtml(html.href, html.body)
+				err := s.ParseHtml(html.Href, html.Body)
 				if err != nil {
-					fmt.Printf("Error occurred parsing %v\n", html.href)
+					fmt.Printf("Error occurred parsing %v\n", html.Href)
 					panic(err)
 				}
 				s.wg.Done() // complete html addition
@@ -72,13 +73,14 @@ func (s *Scraper) Start(output chan io.ReadCloser) {
 			go func() {
 				defer s.wg.Done() // complete go-routine fetching
 				if !s.isValidHref(href) || s.AlreadyDownloaded(href) {
+					fmt.Printf("URL: %v failed to pass filter; ignoring\n", href)
 					s.wg.Done() // complete href addition
 					return
 				}
 
-				s.limiter.Add()
+				limiter.Add()
 				body, err := fetchHref(href)
-				s.limiter.Done()
+				limiter.Done()
 				s.HasDownloaded(href)
 
 				if err != nil || body == nil {
@@ -87,16 +89,20 @@ func (s *Scraper) Start(output chan io.ReadCloser) {
 					return
 				}
 
+				// FIXME: fix TeeReader
+				var bodyW io.ReadWriteCloser
+				bodyT := io.TeeReader(body, bodyW)
+
 				s.wg.Add(1) // add for html addition
-				s.htmls <- htmlResponses{href: href, body: body}
-				output <- body
+				s.htmls <- Html{Href: href, Body: bodyW}
+				output <- Html{Href: href, Body: bodyT}
 				s.wg.Done() // complete href addition
 			}()
 		}
 	}
 }
 
-func (s *Scraper) ParseHtml(parentHref string, html io.ReadCloser) error {
+func (s *Scraper) ParseHtml(parentHref string, html io.Reader) error {
 	doc, err := goquery.NewDocumentFromReader(html)
 	if err != nil {
 		return err
@@ -106,14 +112,20 @@ func (s *Scraper) ParseHtml(parentHref string, html io.ReadCloser) error {
 	for i := range sel.Nodes {
 		href, exists := sel.Eq(i).Attr("href")
 
-		if !exists {
+		if !exists || href == "" {
 			continue
 		}
 
+		con := false
 		for _, s := range UNALLOWED {
 			if strings.Contains(href, s) {
-				continue
+				con = true
+				break
 			}
+		}
+
+		if con {
+			continue
 		}
 
 		cleanedHref := fixMissingHttps(href)
@@ -160,6 +172,10 @@ func fixMissingHttps(url string) string {
 
 	if url[0:2] == "//" {
 		return fmt.Sprintf("https://%s", url[2:])
+	}
+
+	if !strings.Contains(url, "https://") {
+		return fmt.Sprintf("https://%s", url)
 	}
 
 	return url
