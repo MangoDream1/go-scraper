@@ -64,8 +64,8 @@ func (s *Scraper) Start(output chan Html) {
 				defer s.wg.Done() // complete for go-routine for parsing
 				err := s.ParseHtml(html.Href, html.Body)
 				if err != nil {
-					fmt.Printf("Error occurred parsing %v\n", html.Href)
-					panic(err)
+					fmt.Printf("Error occurred parsing %v %v; ignoring\n", html.Href, err)
+					return
 				}
 				s.wg.Done() // complete html addition
 
@@ -137,9 +137,21 @@ func (s *Scraper) ParseHtml(parentHref string, html io.Reader) error {
 		}
 
 		if hostname == "" {
-			cleanedHref, err = url.JoinPath(parentHref, cleanedHref)
-			if err != nil {
-				return err
+			if cleanedHref[0] != '/' {
+				cleanedHref, err = url.JoinPath(parentHref, cleanedHref)
+				if err != nil {
+					return err
+				}
+			} else {
+				parentHostName, err := getHostname(parentHref)
+				if err != nil {
+					return err
+				}
+
+				cleanedHref, err = url.JoinPath(parentHostName, cleanedHref)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
