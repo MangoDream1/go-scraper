@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/url"
@@ -27,8 +28,9 @@ type Scraper struct {
 }
 
 type Html struct {
-	Href string
-	Body io.Reader
+	Href   string
+	Body   io.Reader
+	output io.Reader
 }
 
 func (s *Scraper) Start(output chan Html) {
@@ -66,6 +68,8 @@ func (s *Scraper) Start(output chan Html) {
 					panic(err)
 				}
 				s.wg.Done() // complete html addition
+
+				output <- Html{Href: html.Href, Body: html.output}
 			}()
 
 		case href := <-s.hrefs:
@@ -73,7 +77,7 @@ func (s *Scraper) Start(output chan Html) {
 			go func() {
 				defer s.wg.Done() // complete go-routine fetching
 				if !s.isValidHref(href) || s.AlreadyDownloaded(href) {
-					fmt.Printf("URL: %v failed to pass filter; ignoring\n", href)
+					fmt.Printf("Ignoring url: %v failed to pass filter\n", href)
 					s.wg.Done() // complete href addition
 					return
 				}
@@ -89,13 +93,11 @@ func (s *Scraper) Start(output chan Html) {
 					return
 				}
 
-				// FIXME: fix TeeReader
-				var bodyW io.ReadWriteCloser
+				bodyW := new(bytes.Buffer)
 				bodyT := io.TeeReader(body, bodyW)
 
 				s.wg.Add(1) // add for html addition
-				s.htmls <- Html{Href: href, Body: bodyW}
-				output <- Html{Href: href, Body: bodyT}
+				s.htmls <- Html{Href: href, Body: bodyT, output: bodyW}
 				s.wg.Done() // complete href addition
 			}()
 		}
