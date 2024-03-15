@@ -19,7 +19,7 @@ type Scraper struct {
 	AllowedHrefRegex      *regexp.Regexp
 	AlreadyDownloaded     func(href string) bool
 	HasDownloaded         func(href string)
-	MaxConcurrentRequests uint
+	MaxConcurrentRequests int8
 	StartUrl              string
 	hrefs                 chan string
 	htmls                 chan Html
@@ -36,7 +36,7 @@ type Html struct {
 func (s *Scraper) Start(output chan Html) {
 	s.output = output
 
-	limiter := limiter.NewLimiter(int8(s.MaxConcurrentRequests))
+	limiter := limiter.NewLimiter(s.MaxConcurrentRequests)
 	s.wg = &sync.WaitGroup{}
 
 	s.hrefs = make(chan string)
