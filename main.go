@@ -17,6 +17,7 @@ var UNALLOWED [2]string = [2]string{"javascript", "#"}
 
 type Scraper struct {
 	AllowedHrefRegex      *regexp.Regexp
+	BlockedHrefRegex      *regexp.Regexp
 	AlreadyDownloaded     func(href string) bool
 	HasDownloaded         func(href string)
 	MaxConcurrentRequests int8
@@ -163,14 +164,20 @@ func (s *Scraper) ParseHtml(parentHref string, html io.Reader) error {
 }
 
 func (s *Scraper) isValidHref(href string) bool {
-	if s.AllowedHrefRegex == nil {
-		return false // no regex defined, consider all hrefs invalid
+	if s.BlockedHrefRegex != nil {
+		match := s.BlockedHrefRegex.FindStringSubmatch(href)
+		if len(match) > 0 {
+			return false
+		}
 	}
 
-	match := s.AllowedHrefRegex.FindStringSubmatch(href)
-	if match != nil && len(match[0]) > 0 {
-		return true
+	if s.AllowedHrefRegex != nil {
+		match := s.AllowedHrefRegex.FindStringSubmatch(href)
+		if len(match) > 0 {
+			return true
+		}
 	}
+
 	return false
 }
 

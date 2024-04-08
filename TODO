@@ -1,2 +1,1 @@
 - [ ] instead of sending the html over a channel; have them pass a writer, which can be used in the io.TeeReader, which could be much more efficient
-- [ ] add a do not allow filter group
