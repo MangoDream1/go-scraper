@@ -83,7 +83,18 @@ func (s *scraper) Start(output chan Html) {
 				defer s.wg.Done() // complete for go-routine for parsing
 				defer s.wg.Done() // complete html addition
 
-				err := s.ParseHtml(html.Href, html.Body)
+				o := make(chan string)
+				defer close(o)
+
+				s.wg.Add(1)
+				go func() {
+					defer s.wg.Done()
+					for href := range o {
+						s.AddHref(href)
+					}
+				}()
+				err := ParseHtml(html.Href, html.Body, o)
+
 				if err != nil {
 					fmt.Printf("Error occurred parsing %v %v; ignoring\n", html.Href, err)
 					return
@@ -128,10 +139,12 @@ func (s *scraper) Start(output chan Html) {
 	}
 }
 
-func (s *scraper) ParseHtml(parentHref string, html io.Reader) error {
-	s.wg.Add(1) // add in-case of outside go-routine call
-	defer s.wg.Done()
+func (s *scraper) AddHref(href string) {
+	s.wg.Add(1)
+	s.hrefs <- fixMissingHttps(href)
+}
 
+func ParseHtml(parentHref string, html io.Reader, output chan string) error {
 	doc, err := goquery.NewDocumentFromReader(html)
 	if err != nil {
 		return err
@@ -182,8 +195,7 @@ func (s *scraper) ParseHtml(parentHref string, html io.Reader) error {
 			}
 		}
 
-		s.wg.Add(1)
-		s.hrefs <- fixMissingHttps(cleanedHref)
+		output <- fixMissingHttps(cleanedHref)
 	}
 
 	return nil
