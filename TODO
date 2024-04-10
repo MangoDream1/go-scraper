@@ -1,2 +1,1 @@
 - [ ] instead of sending the html over a channel; have them pass a writer, which can be used in the io.TeeReader, which could be much more efficient
-- [ ] split the init and start, so can also start from existing html
